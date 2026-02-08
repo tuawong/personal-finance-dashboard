@@ -1,0 +1,336 @@
+"""
+Visualization functions for the personal finance dashboard.
+All functions return Plotly figure objects that can be used in Dash or displayed directly.
+"""
+
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from typing import Optional, List
+
+
+def create_daily_spending_chart(spending_df: pd.DataFrame) -> go.Figure:
+    """
+    Create a scatter plot of daily spending over time, color-coded by source.
+    
+    Args:
+        spending_df: DataFrame with columns ['Date', 'Source', 'Amount', 'Description']
+        
+    Returns:
+        Plotly figure object
+    """
+    daily_spending = spending_df.groupby(['Date', 'Source']).agg({
+        'Amount': 'sum',
+        'Description': lambda x: '<br>'.join(x.astype(str))
+    }).reset_index()
+
+    fig = px.scatter(
+        daily_spending,
+        x='Date',
+        y='Amount',
+        color='Source',
+        hover_data={'Description': True, 'Amount': ':.2f'},
+        title='Daily Spending by Source'
+    )
+
+    # Add trend lines for each source
+    for source in daily_spending['Source'].unique():
+        source_data = daily_spending[daily_spending['Source'] == source].sort_values('Date')
+        fig.add_trace(go.Scatter(
+            x=source_data['Date'],
+            y=source_data['Amount'],
+            mode='lines',
+            name=f'{source} (trend)',
+            line=dict(width=1, dash='dot'),
+            showlegend=False,
+            hoverinfo='skip'
+        ))
+
+    fig.update_layout(
+        xaxis_title='Date',
+        yaxis_title='Amount ($)',
+        hovermode='closest'
+    )
+    
+    return fig
+
+
+def create_account_balance_chart(account_df: pd.DataFrame) -> go.Figure:
+    """
+    Create a line chart showing account balance progression over time.
+    
+    Args:
+        account_df: DataFrame with columns ['Date', 'Balance', 'Description']
+        
+    Returns:
+        Plotly figure object
+    """
+    df_balance = account_df.dropna(subset=['Balance']).sort_values('Date')
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df_balance['Date'],
+        y=df_balance['Balance'],
+        mode='lines+markers',
+        name='Balance',
+        line=dict(color='green', width=2),
+        marker=dict(size=6),
+        hovertemplate='<b>Date:</b> %{x}<br><b>Balance:</b> $%{y:,.2f}<br><b>Transaction:</b> %{customdata}<extra></extra>',
+        customdata=df_balance['Description']
+    ))
+
+    fig.update_layout(
+        title='Account Balance Over Time',
+        xaxis_title='Date',
+        yaxis_title='Balance ($)',
+        hovermode='x unified'
+    )
+    
+    return fig
+
+
+def create_category_bar_chart(spending_df: pd.DataFrame, selected_month: str) -> go.Figure:
+    """
+    Create a horizontal bar chart of spending by category for a selected month.
+    
+    Args:
+        spending_df: DataFrame with columns ['Month', 'Category', 'Amount']
+        selected_month: Month string in format 'YYYY-MM'
+        
+    Returns:
+        Plotly figure object
+    """
+    month_data = spending_df[spending_df['Month'] == selected_month]
+    category_spending = month_data.groupby('Category')['Amount'].sum().reset_index()
+    category_spending = category_spending.sort_values('Amount', ascending=True)
+
+    fig = px.bar(
+        category_spending,
+        x='Amount',
+        y='Category',
+        orientation='h',
+        title=f'Spending by Category - {selected_month}',
+        color='Category',
+        color_discrete_sequence=px.colors.qualitative.Bold,
+        text=category_spending['Amount'].apply(lambda x: f'${x:,.2f}')
+    )
+
+    fig.update_traces(textposition='outside')
+    fig.update_layout(
+        xaxis_title='Total Amount ($)',
+        yaxis_title='Category',
+        showlegend=False
+    )
+    
+    return fig
+
+
+def create_savings_pie_chart(
+    spending_df: pd.DataFrame,
+    account_df: pd.DataFrame,
+    selected_month: str
+) -> go.Figure:
+    """
+    Create a donut pie chart showing spending breakdown vs savings.
+    If payroll data is available, shows savings as the gap between income and expenses.
+    
+    Args:
+        spending_df: DataFrame with columns ['Month', 'Category', 'Amount']
+        account_df: DataFrame with columns ['Month', 'Category', 'Amount']
+        selected_month: Month string in format 'YYYY-MM'
+        
+    Returns:
+        Plotly figure object
+    """
+    # Get payroll for selected month (negative amounts = income)
+    month_income = account_df[
+        (account_df['Month'] == selected_month) &
+        (account_df['Category'] == 'Salary')
+    ]['Amount'].sum()
+
+    payroll = abs(month_income) if month_income < 0 else 0
+
+    # Get expenses by category for selected month
+    month_spending = spending_df[spending_df['Month'] == selected_month]
+    expenses_by_category = month_spending.groupby('Category')['Amount'].sum().to_dict()
+    total_expenses = sum(expenses_by_category.values())
+
+    if payroll > 0:
+        # Calculate savings and create pie with categories + savings
+        savings = payroll - total_expenses
+        labels = list(expenses_by_category.keys()) + ['Savings']
+        values = list(expenses_by_category.values()) + [max(0, savings)]
+        colors = px.colors.qualitative.Set2[:len(expenses_by_category)] + ['lightgreen']
+        
+        fig = go.Figure(data=[go.Pie(
+            labels=labels,
+            values=values,
+            hole=0.4,
+            marker_colors=colors,
+            texttemplate='%{label}<br>$%{value:,.2f} (%{percent})',
+            textposition='outside',
+            hovertemplate='<b>%{label}</b><br>Amount: $%{value:,.2f}<br>Percentage: %{percent}<extra></extra>'
+        )])
+        
+        fig.update_layout(
+            title=f'Income Allocation - {selected_month}<br><sub>Payroll: ${payroll:,.2f}</sub>',
+            annotations=[dict(text=f'${payroll:,.0f}', x=0.5, y=0.5, font_size=16, showarrow=False)],
+            height=600,
+            margin=dict(t=80, b=80, l=80, r=80)
+        )
+    else:
+        # No payroll - just show spending breakdown
+        labels = list(expenses_by_category.keys())
+        values = list(expenses_by_category.values())
+        
+        fig = go.Figure(data=[go.Pie(
+            labels=labels,
+            values=values,
+            hole=0.4,
+            texttemplate='%{label}<br>$%{value:,.2f} (%{percent})',
+            textposition='outside',
+            hovertemplate='<b>%{label}</b><br>Amount: $%{value:,.2f}<br>Percentage: %{percent}<extra></extra>'
+        )])
+        
+        fig.update_layout(
+            title=f'Spending Breakdown - {selected_month}<br><sub>(No payroll data available)</sub>',
+            annotations=[dict(text=f'${total_expenses:,.0f}', x=0.5, y=0.5, font_size=16, showarrow=False)],
+            height=600,
+            margin=dict(t=80, b=80, l=80, r=80)
+        )
+
+    return fig
+
+
+def create_monthly_trend_chart(spending_df: pd.DataFrame) -> go.Figure:
+    """
+    Create a line chart showing total spending per month.
+    
+    Args:
+        spending_df: DataFrame with columns ['Month', 'Amount']
+        
+    Returns:
+        Plotly figure object
+    """
+    monthly_totals = spending_df.groupby('Month')['Amount'].sum().reset_index()
+    monthly_totals = monthly_totals.sort_values('Month')
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=monthly_totals['Month'],
+        y=monthly_totals['Amount'],
+        mode='lines+markers+text',
+        name='Total Spending',
+        line=dict(color='coral', width=3),
+        marker=dict(size=10),
+        text=monthly_totals['Amount'].apply(lambda x: f'${x:,.0f}'),
+        textposition='top center',
+        hovertemplate='<b>Month:</b> %{x}<br><b>Total:</b> $%{y:,.2f}<extra></extra>'
+    ))
+
+    fig.update_layout(
+        title='Monthly Spending Trend',
+        xaxis_title='Month',
+        yaxis_title='Total Spending ($)',
+        hovermode='x unified'
+    )
+    
+    return fig
+
+
+def create_day_of_week_chart(spending_df: pd.DataFrame) -> go.Figure:
+    """
+    Create a bar chart showing spending patterns by day of week.
+    
+    Args:
+        spending_df: DataFrame with columns ['Date', 'Amount']
+        
+    Returns:
+        Plotly figure object
+    """
+    df = spending_df.copy()
+    df['DayOfWeek'] = df['Date'].dt.day_name()
+    day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+    dow_spending = df.groupby('DayOfWeek').agg({
+        'Amount': ['sum', 'mean', 'count']
+    }).reset_index()
+    dow_spending.columns = ['DayOfWeek', 'Total', 'Average', 'Count']
+    dow_spending['DayOfWeek'] = pd.Categorical(
+        dow_spending['DayOfWeek'],
+        categories=day_order,
+        ordered=True
+    )
+    dow_spending = dow_spending.sort_values('DayOfWeek')
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=dow_spending['DayOfWeek'],
+        y=dow_spending['Total'],
+        name='Total Spending',
+        marker_color='steelblue',
+        text=dow_spending['Total'].apply(lambda x: f'${x:,.0f}'),
+        textposition='outside',
+        hovertemplate='<b>%{x}</b><br>Total: $%{y:,.2f}<br>Avg: $%{customdata[0]:,.2f}<br>Transactions: %{customdata[1]}<extra></extra>',
+        customdata=dow_spending[['Average', 'Count']].values
+    ))
+
+    fig.update_layout(
+        title='Spending by Day of Week',
+        xaxis_title='Day',
+        yaxis_title='Total Spending ($)',
+        showlegend=False
+    )
+    
+    return fig
+
+
+def create_top_merchants_chart(
+    spending_df: pd.DataFrame,
+    excluded_categories: Optional[List[str]] = None,
+    top_n: int = 10
+) -> go.Figure:
+    """
+    Create a horizontal bar chart of top merchants by total spending.
+    
+    Args:
+        spending_df: DataFrame with columns ['Description', 'Amount', 'Category']
+        excluded_categories: List of category names to exclude (default: ['Trip', 'Insurance', 'Mortgage'])
+        top_n: Number of top merchants to show (default: 10)
+        
+    Returns:
+        Plotly figure object
+    """
+    if excluded_categories is None:
+        excluded_categories = ['Trip', 'Insurance', 'Mortgage']
+    
+    filtered_spending = spending_df[~spending_df['Category'].isin(excluded_categories)]
+
+    top_merchants = filtered_spending.groupby('Description').agg({
+        'Amount': ['sum', 'count']
+    }).reset_index()
+    top_merchants.columns = ['Description', 'Total', 'Transactions']
+    top_merchants = top_merchants.nlargest(top_n, 'Total')
+    top_merchants = top_merchants.sort_values('Total', ascending=True)
+
+    fig = px.bar(
+        top_merchants,
+        x='Total',
+        y='Description',
+        orientation='h',
+        title=f'Top {top_n} Merchants (All Time)',
+        color='Total',
+        color_continuous_scale='Blues',
+        text=top_merchants['Total'].apply(lambda x: f'${x:,.2f}'),
+        hover_data={'Transactions': True}
+    )
+
+    fig.update_traces(textposition='outside')
+    fig.update_layout(
+        xaxis_title='Total Spending ($)',
+        yaxis_title='Merchant',
+        showlegend=False,
+        height=500
+    )
+    
+    return fig
