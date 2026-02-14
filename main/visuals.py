@@ -95,12 +95,18 @@ def create_category_bar_chart(spending_df: pd.DataFrame, selected_month: str) ->
     
     Args:
         spending_df: DataFrame with columns ['Month', 'Category', 'Amount']
-        selected_month: Month string in format 'YYYY-MM'
+        selected_month: Month string in format 'YYYY-MM' or 'All'
         
     Returns:
         Plotly figure object
     """
-    month_data = spending_df[spending_df['Month'] == selected_month]
+    if selected_month == 'All':
+        month_data = spending_df
+        title_suffix = 'All Time'
+    else:
+        month_data = spending_df[spending_df['Month'] == selected_month]
+        title_suffix = selected_month
+    
     category_spending = month_data.groupby('Category')['Amount'].sum().reset_index()
     category_spending = category_spending.sort_values('Amount', ascending=True)
 
@@ -109,7 +115,7 @@ def create_category_bar_chart(spending_df: pd.DataFrame, selected_month: str) ->
         x='Amount',
         y='Category',
         orientation='h',
-        title=f'Spending by Category - {selected_month}',
+        title=f'Spending by Category - {title_suffix}',
         color='Category',
         color_discrete_sequence=px.colors.qualitative.Bold,
         text=category_spending['Amount'].apply(lambda x: f'${x:,.2f}')
@@ -125,6 +131,163 @@ def create_category_bar_chart(spending_df: pd.DataFrame, selected_month: str) ->
     return fig
 
 
+# Extended color palette (30 colors)
+CATEGORY_COLORS = [
+    '#66c2a5', '#fc8d62', '#8da0cb', '#e78ac3', '#a6d854', '#ffd92f',
+    '#e5c494', '#b3b3b3', '#1f78b4', '#33a02c', '#fb9a99', '#e31a1c',
+    '#fdbf6f', '#ff7f00', '#cab2d6', '#6a3d9a', '#ffff99', '#b15928',
+    '#a6cee3', '#b2df8a', '#fb8072', '#80b1d3', '#fdb462', '#b3de69',
+    '#fccde5', '#d9d9d9', '#bc80bd', '#ccebc5', '#ffed6f', '#8dd3c7'
+]
+
+
+def _get_payroll_and_expenses(spending_df, account_df, selected_month):
+    """Helper function to calculate payroll and expenses for a given period."""
+    if selected_month == 'All':
+        month_income = account_df[
+            account_df['Category'] == 'Salary'
+        ]['Amount'].sum()
+        month_spending = spending_df
+        title_suffix = 'All Time'
+    else:
+        month_income = account_df[
+            (account_df['Month'] == selected_month) &
+            (account_df['Category'] == 'Salary')
+        ]['Amount'].sum()
+        month_spending = spending_df[spending_df['Month'] == selected_month]
+        title_suffix = selected_month
+
+    payroll = abs(month_income) if month_income < 0 else 0
+    expenses_by_category = month_spending.groupby('Category')['Amount'].sum().to_dict()
+    total_expenses = sum(expenses_by_category.values())
+    
+    return payroll, expenses_by_category, total_expenses, title_suffix
+
+
+def create_spending_vs_savings_pie(
+    spending_df: pd.DataFrame,
+    account_df: pd.DataFrame,
+    selected_month: str
+) -> go.Figure:
+    """
+    Create a donut pie chart comparing total spending vs savings.
+    
+    Args:
+        spending_df: DataFrame with columns ['Month', 'Category', 'Amount']
+        account_df: DataFrame with columns ['Month', 'Category', 'Amount']
+        selected_month: Month string in format 'YYYY-MM' or 'All'
+        
+    Returns:
+        Plotly figure object
+    """
+    payroll, expenses_by_category, total_expenses, title_suffix = _get_payroll_and_expenses(
+        spending_df, account_df, selected_month
+    )
+
+    if payroll > 0:
+        savings = max(0, payroll - total_expenses)
+        
+        fig = go.Figure(data=[go.Pie(
+            labels=['Spending', 'Savings'],
+            values=[total_expenses, savings],
+            hole=0.4,
+            marker_colors=['coral', 'lightgreen'],
+            texttemplate='%{label}<br>$%{value:,.2f}<br>(%{percent})',
+            textposition='outside',
+            hovertemplate='<b>%{label}</b><br>Amount: $%{value:,.2f}<br>Percentage: %{percent}<extra></extra>'
+        )])
+        
+        fig.update_layout(
+            title=f'Spending vs Savings - {title_suffix}<br><sub>Payroll: ${payroll:,.2f}</sub>',
+            height=350,
+            margin=dict(t=80, b=60, l=60, r=60),
+            showlegend=False
+        )
+    else:
+        # No payroll - show placeholder
+        fig = go.Figure(data=[go.Pie(
+            labels=['Spending'],
+            values=[total_expenses],
+            hole=0.4,
+            marker_colors=['coral'],
+            texttemplate='%{label}<br>$%{value:,.2f}',
+            textposition='outside'
+        )])
+        
+        fig.update_layout(
+            title=f'Spending vs Savings - {title_suffix}<br><sub>(No payroll data available)</sub>',
+            height=350,
+            margin=dict(t=80, b=60, l=60, r=60),
+            showlegend=False
+        )
+
+    return fig
+
+
+def create_spending_breakdown_pie(
+    spending_df: pd.DataFrame,
+    account_df: pd.DataFrame,
+    selected_month: str
+) -> go.Figure:
+    """
+    Create a donut pie chart showing spending breakdown by category.
+    Categories under 1% are grouped into 'Others'.
+    
+    Args:
+        spending_df: DataFrame with columns ['Month', 'Category', 'Amount']
+        account_df: DataFrame with columns ['Month', 'Category', 'Amount']
+        selected_month: Month string in format 'YYYY-MM' or 'All'
+        
+    Returns:
+        Plotly figure object
+    """
+    payroll, expenses_by_category, total_expenses, title_suffix = _get_payroll_and_expenses(
+        spending_df, account_df, selected_month
+    )
+
+    # Group categories under 1% into "Others"
+    threshold = 0.01 * total_expenses if total_expenses > 0 else 0
+    grouped_expenses = {}
+    others_total = 0
+
+    for category, amount in expenses_by_category.items():
+        if amount < threshold:
+            others_total += amount
+        else:
+            grouped_expenses[category] = amount
+
+    if others_total > 0:
+        grouped_expenses['Others'] = others_total
+
+    labels = list(grouped_expenses.keys())
+    values = list(grouped_expenses.values())
+    
+    # Assign colors, with grey for "Others"
+    colors = list(CATEGORY_COLORS[:len(labels)])
+    if 'Others' in labels:
+        others_idx = labels.index('Others')
+        colors[others_idx] = 'lightgrey'
+    
+    fig = go.Figure(data=[go.Pie(
+        labels=labels,
+        values=values,
+        hole=0.4,
+        marker_colors=colors,
+        texttemplate='%{label}<br>$%{value:,.2f}<br>(%{percent})',
+        textposition='outside',
+        hovertemplate='<b>%{label}</b><br>Amount: $%{value:,.2f}<br>Percentage: %{percent}<extra></extra>'
+    )])
+    
+    fig.update_layout(
+        title=f'Spending Breakdown - {title_suffix}',
+        height=400,
+        margin=dict(t=80, b=80, l=100, r=100),
+        showlegend=False
+    )
+
+    return fig
+
+
 def create_savings_pie_chart(
     spending_df: pd.DataFrame,
     account_df: pd.DataFrame,
@@ -137,30 +300,21 @@ def create_savings_pie_chart(
     Args:
         spending_df: DataFrame with columns ['Month', 'Category', 'Amount']
         account_df: DataFrame with columns ['Month', 'Category', 'Amount']
-        selected_month: Month string in format 'YYYY-MM'
+        selected_month: Month string in format 'YYYY-MM' or 'All'
         
     Returns:
         Plotly figure object
     """
-    # Get payroll for selected month (negative amounts = income)
-    month_income = account_df[
-        (account_df['Month'] == selected_month) &
-        (account_df['Category'] == 'Salary')
-    ]['Amount'].sum()
-
-    payroll = abs(month_income) if month_income < 0 else 0
-
-    # Get expenses by category for selected month
-    month_spending = spending_df[spending_df['Month'] == selected_month]
-    expenses_by_category = month_spending.groupby('Category')['Amount'].sum().to_dict()
-    total_expenses = sum(expenses_by_category.values())
+    payroll, expenses_by_category, total_expenses, title_suffix = _get_payroll_and_expenses(
+        spending_df, account_df, selected_month
+    )
 
     if payroll > 0:
         # Calculate savings and create pie with categories + savings
         savings = payroll - total_expenses
         labels = list(expenses_by_category.keys()) + ['Savings']
         values = list(expenses_by_category.values()) + [max(0, savings)]
-        colors = px.colors.qualitative.Set2[:len(expenses_by_category)] + ['lightgreen']
+        colors = list(CATEGORY_COLORS[:len(expenses_by_category)]) + ['lightgreen']
         
         fig = go.Figure(data=[go.Pie(
             labels=labels,
@@ -173,7 +327,7 @@ def create_savings_pie_chart(
         )])
         
         fig.update_layout(
-            title=f'Income Allocation - {selected_month}<br><sub>Payroll: ${payroll:,.2f}</sub>',
+            title=f'Income Allocation - {title_suffix}<br><sub>Payroll: ${payroll:,.2f}</sub>',
             annotations=[dict(text=f'${payroll:,.0f}', x=0.5, y=0.5, font_size=16, showarrow=False)],
             height=600,
             margin=dict(t=80, b=80, l=80, r=80)
@@ -193,7 +347,7 @@ def create_savings_pie_chart(
         )])
         
         fig.update_layout(
-            title=f'Spending Breakdown - {selected_month}<br><sub>(No payroll data available)</sub>',
+            title=f'Spending Breakdown - {title_suffix}<br><sub>(No payroll data available)</sub>',
             annotations=[dict(text=f'${total_expenses:,.0f}', x=0.5, y=0.5, font_size=16, showarrow=False)],
             height=600,
             margin=dict(t=80, b=80, l=80, r=80)
