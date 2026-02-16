@@ -9,10 +9,7 @@ from main.visuals import (
     create_daily_spending_chart,
     create_category_bar_chart,
     create_spending_vs_savings_pie,
-    create_spending_breakdown_pie,
-    create_monthly_trend_chart,
-    create_day_of_week_chart,
-    create_top_merchants_chart
+    create_spending_breakdown_pie
 )
 from main.sql import load_all_spending_from_db
 
@@ -24,7 +21,7 @@ register_page(__name__, path='/spending', name='Spending')
 # account_balance = pd.read_csv('data/Processed/account_balance.csv')
 all_spending = load_all_spending_from_db()
 spending_by_source = all_spending.loc[~all_spending.Category.isin(['Transfer', 'Credit card payment', 'Salary'])]
-spending_by_source['Amount'] = spending_by_source['Amount'].replace('[\$,]', '', regex=True).astype(float)
+spending_by_source['Amount'] = spending_by_source['Amount'].replace('$', '', regex=True).astype(float)
 
 account_balance = all_spending.loc[all_spending.Source=='Scotia Debit']
 
@@ -82,34 +79,21 @@ layout = html.Div([
             dcc.Graph(id='spending-breakdown-pie')
         ], style={'width': '48%', 'display': 'inline-block', 'marginLeft': '2%', 'verticalAlign': 'top'}),
     ], style={'marginBottom': '20px'}),
-    
-    # Row 3: Monthly trend and Day of week
-    html.Div([
-        html.Div([
-            dcc.Graph(id='monthly-trend-chart')
-        ], style={'width': '48%', 'display': 'inline-block', 'verticalAlign': 'top'}),
-        
-        html.Div([
-            dcc.Graph(id='day-of-week-chart')
-        ], style={'width': '48%', 'display': 'inline-block', 'marginLeft': '2%', 'verticalAlign': 'top'}),
-    ], style={'marginBottom': '20px'}),
-    
-    # Row 4: Top merchants (full width)
-    html.Div([
-        dcc.Graph(id='top-merchants-chart')
-    ], style={'marginBottom': '20px'}),
 ])
 
 
 # Callbacks
 @callback(
     Output('daily-spending-chart', 'figure'),
-    [Input('spending-source-dropdown', 'value')]
+    [Input('spending-month-dropdown', 'value'),
+     Input('spending-source-dropdown', 'value')]
 )
-def update_daily_spending(selected_sources):
+def update_daily_spending(selected_month, selected_sources):
     if not selected_sources:
         selected_sources = all_sources
     df = spending_by_source[spending_by_source['Source'].isin(selected_sources)]
+    if selected_month != 'All':
+        df = df[df['Month'] == selected_month]
     return create_daily_spending_chart(df)
 
 
@@ -147,36 +131,3 @@ def update_spending_breakdown_pie(selected_month, selected_sources):
         selected_sources = all_sources
     df = spending_by_source[spending_by_source['Source'].isin(selected_sources)]
     return create_spending_breakdown_pie(df, account_balance, selected_month)
-
-
-@callback(
-    Output('monthly-trend-chart', 'figure'),
-    Input('spending-source-dropdown', 'value')
-)
-def update_monthly_trend(selected_sources):
-    if not selected_sources:
-        selected_sources = all_sources
-    df = spending_by_source[spending_by_source['Source'].isin(selected_sources)]
-    return create_monthly_trend_chart(df)
-
-
-@callback(
-    Output('day-of-week-chart', 'figure'),
-    Input('spending-source-dropdown', 'value')
-)
-def update_day_of_week(selected_sources):
-    if not selected_sources:
-        selected_sources = all_sources
-    df = spending_by_source[spending_by_source['Source'].isin(selected_sources)]
-    return create_day_of_week_chart(df)
-
-
-@callback(
-    Output('top-merchants-chart', 'figure'),
-    Input('spending-source-dropdown', 'value')
-)
-def update_top_merchants(selected_sources):
-    if not selected_sources:
-        selected_sources = all_sources
-    df = spending_by_source[spending_by_source['Source'].isin(selected_sources)]
-    return create_top_merchants_chart(df)

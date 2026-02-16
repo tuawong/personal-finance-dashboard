@@ -74,5 +74,23 @@ layout = html.Div([
             'textAlign': 'center',
             'minHeight': '150px'
         }),
+        
+        # Analytics card
+        html.Div([
+            html.H3("📈 Analytics", style={'color': '#e67e22'}),
+            html.P("Explore spending trends, patterns by day, and top merchants."),
+            html.A("Go to Analytics →", href='/analytics',
+                   style={'color': '#e67e22', 'textDecoration': 'none', 'fontWeight': 'bold'})
+        ], style={
+            'width': '280px',
+            'display': 'inline-block',
+            'padding': '30px',
+            'backgroundColor': '#f8f9fa',
+            'borderRadius': '10px',
+            'margin': '15px',
+            'verticalAlign': 'top',
+            'textAlign': 'center',
+            'minHeight': '150px'
+        }),
     ], style={'textAlign': 'center', 'maxWidth': '1100px', 'margin': '0 auto'}),
 ], style={'padding': '40px'})

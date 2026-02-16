@@ -9,6 +9,7 @@ class AllSpending(Base):
     Subdescription = Column(String(255), nullable=True)
     Amount = Column(Float, nullable=False)
     Source = Column(String(50), nullable=False)
+    File = Column(String(255), nullable=False)
     Balance = Column(Float, nullable=True)
     Category = Column(String(50), nullable=True)
 
