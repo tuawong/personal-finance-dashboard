@@ -14,13 +14,19 @@ from main.visuals import (
     create_day_of_week_chart,
     create_top_merchants_chart
 )
+from main.sql import load_all_spending_from_db
 
 # Register page
 register_page(__name__, path='/spending', name='Spending')
 
 # Load and prepare data
-spending_by_source = pd.read_csv('data/Processed/spending_by_source.csv')
-account_balance = pd.read_csv('data/Processed/account_balance.csv')
+# spending_by_source = pd.read_csv('data/Processed/spending_by_source.csv')
+# account_balance = pd.read_csv('data/Processed/account_balance.csv')
+all_spending = load_all_spending_from_db()
+spending_by_source = all_spending.loc[~all_spending.Category.isin(['Transfer', 'Credit card payment', 'Salary'])]
+spending_by_source['Amount'] = spending_by_source['Amount'].replace('[\$,]', '', regex=True).astype(float)
+
+account_balance = all_spending.loc[all_spending.Source=='Scotia Debit']
 
 spending_by_source['Date'] = pd.to_datetime(spending_by_source['Date'])
 account_balance['Date'] = pd.to_datetime(account_balance['Date'])

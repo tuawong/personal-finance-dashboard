@@ -2,7 +2,6 @@
 Visualization functions for the personal finance dashboard.
 All functions return Plotly figure objects that can be used in Dash or displayed directly.
 """
-
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go

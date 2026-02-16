@@ -6,12 +6,14 @@ import pandas as pd
 from dash import html, dcc, register_page
 
 from main.visuals import create_account_balance_chart
+from main.sql import load_all_spending_from_db
 
 # Register page
 register_page(__name__, path='/balance', name='Balance')
 
 # Load and prepare data
-account_balance = pd.read_csv('data/Processed/account_balance.csv')
+#account_balance = pd.read_csv('data/Processed/account_balance.csv')
+account_balance = load_all_spending_from_db()
 account_balance['Date'] = pd.to_datetime(account_balance['Date'])
 
 # Create the chart

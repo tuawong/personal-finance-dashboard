@@ -5,11 +5,17 @@ Transaction History Page
 import pandas as pd
 from dash import html, dcc, callback, Output, Input, register_page, dash_table
 
+from main.sql import load_all_spending_from_db
+
 # Register page
 register_page(__name__, path='/transactions', name='Transactions')
 
 # Load and prepare data
-spending_by_source = pd.read_csv('data/Processed/spending_by_source.csv')
+
+#spending_by_source = pd.read_csv('data/Processed/spending_by_source.csv')
+all_spending = load_all_spending_from_db()
+spending_by_source = all_spending.loc[~all_spending.Category.isin(['Transfer', 'Credit card payment', 'Salary'])]
+spending_by_source['Amount'] = spending_by_source['Amount'].replace('[\$,]', '', regex=True).astype(float)
 spending_by_source['Date'] = pd.to_datetime(spending_by_source['Date'])
 spending_by_source['Month'] = spending_by_source['Date'].dt.to_period('M').astype(str)
 
