@@ -28,7 +28,7 @@ all_sources = spending_by_source['Source'].unique().tolist()
 all_categories = ['All'] + sorted(spending_by_source['Category'].unique().tolist())
 
 # Prepare display data
-display_columns = ['Date_Display', 'Description', 'Category', 'Source', 'Amount']
+display_columns = ['Date_Display', 'Description', 'Subdescription', 'Category', 'Source', 'Amount']
 
 # Layout
 layout = html.Div([
@@ -79,6 +79,7 @@ layout = html.Div([
         columns=[
             {'name': 'Date', 'id': 'Date_Display'},
             {'name': 'Description', 'id': 'Description'},
+            {'name': 'Details', 'id': 'Subdescription'},
             {'name': 'Category', 'id': 'Category'},
             {'name': 'Source', 'id': 'Source'},
             {'name': 'Amount', 'id': 'Amount', 'type': 'numeric', 'format': {'specifier': '$.2f'}},

@@ -468,7 +468,15 @@ def create_top_merchants_chart(
     
     filtered_spending = spending_df[~spending_df['Category'].isin(excluded_categories)]
 
-    merchant_summary = filtered_spending.groupby('Description').agg({
+    desc_lower = filtered_spending['Description'].astype(str).str.strip().str.lower()
+    sub_desc = filtered_spending.get('Subdescription')
+    use_sub_desc = desc_lower.isin({'bill payment', 'pos purchase'}) & sub_desc.notna()
+    display_description = filtered_spending['Description'].astype(str)
+    display_description = display_description.where(~use_sub_desc, sub_desc.astype(str))
+
+    merchant_summary = filtered_spending.assign(
+        DisplayDescription=display_description
+    ).groupby('DisplayDescription').agg({
         'Amount': ['sum', 'count']
     }).reset_index()
     merchant_summary.columns = ['Description', 'Total', 'Transactions']
