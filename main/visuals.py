@@ -5,6 +5,7 @@ All functions return Plotly figure objects that can be used in Dash or displayed
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from typing import Optional, List
 
 
@@ -426,19 +427,19 @@ def create_day_of_week_chart(spending_df: pd.DataFrame) -> go.Figure:
     fig = go.Figure()
     fig.add_trace(go.Bar(
         x=dow_spending['DayOfWeek'],
-        y=dow_spending['Total'],
-        name='Total Spending',
+        y=dow_spending['Average'],
+        name='Average Spending',
         marker_color='steelblue',
-        text=dow_spending['Total'].apply(lambda x: f'${x:,.0f}'),
+        text=dow_spending['Average'].apply(lambda x: f'${x:,.2f}'),
         textposition='outside',
-        hovertemplate='<b>%{x}</b><br>Total: $%{y:,.2f}<br>Avg: $%{customdata[0]:,.2f}<br>Transactions: %{customdata[1]}<extra></extra>',
+        hovertemplate='<b>%{x}</b><br>Average: $%{y:,.2f}<br>Total: $%{customdata[0]:,.2f}<br>Transactions: %{customdata[1]}<extra></extra>',
         customdata=dow_spending[['Average', 'Count']].values
     ))
 
     fig.update_layout(
         title='Spending by Day of Week',
         xaxis_title='Day',
-        yaxis_title='Total Spending ($)',
+        yaxis_title='Average Spending ($)',
         showlegend=False
     )
     
@@ -467,31 +468,60 @@ def create_top_merchants_chart(
     
     filtered_spending = spending_df[~spending_df['Category'].isin(excluded_categories)]
 
-    top_merchants = filtered_spending.groupby('Description').agg({
+    merchant_summary = filtered_spending.groupby('Description').agg({
         'Amount': ['sum', 'count']
     }).reset_index()
-    top_merchants.columns = ['Description', 'Total', 'Transactions']
-    top_merchants = top_merchants.nlargest(top_n, 'Total')
-    top_merchants = top_merchants.sort_values('Total', ascending=True)
+    merchant_summary.columns = ['Description', 'Total', 'Transactions']
 
-    fig = px.bar(
-        top_merchants,
-        x='Total',
-        y='Description',
-        orientation='h',
-        title=f'Top {top_n} Merchants (All Time)',
-        color='Total',
-        color_continuous_scale='Blues',
-        text=top_merchants['Total'].apply(lambda x: f'${x:,.2f}'),
-        hover_data={'Transactions': True}
+    top_by_total = merchant_summary.nlargest(top_n, 'Total').sort_values('Total', ascending=True)
+    top_by_txn = merchant_summary.nlargest(top_n, 'Transactions').sort_values('Transactions', ascending=True)
+
+    fig = make_subplots(
+        rows=1,
+        cols=2,
+        shared_yaxes=False,
+        horizontal_spacing=0.12,
+        subplot_titles=('Total Spending', 'Transactions')
     )
 
-    fig.update_traces(textposition='outside')
+    fig.add_trace(
+        go.Bar(
+            x=top_by_total['Total'],
+            y=top_by_total['Description'],
+            orientation='h',
+            name='Total Spending',
+            marker_color='steelblue',
+            text=top_by_total['Total'].apply(lambda x: f'${x:,.2f}'),
+            textposition='outside',
+            hovertemplate='<b>%{y}</b><br>Total: $%{x:,.2f}<extra></extra>'
+        ),
+        row=1,
+        col=1
+    )
+
+    fig.add_trace(
+        go.Bar(
+            x=top_by_txn['Transactions'],
+            y=top_by_txn['Description'],
+            orientation='h',
+            name='Transactions',
+            marker_color='lightgrey',
+            text=top_by_txn['Transactions'],
+            textposition='outside',
+            hovertemplate='<b>%{y}</b><br>Transactions: %{x}<extra></extra>'
+        ),
+        row=1,
+        col=2
+    )
+
     fig.update_layout(
-        xaxis_title='Total Spending ($)',
-        yaxis_title='Merchant',
+        title=f'Top {top_n} Merchants (All Time)',
         showlegend=False
     )
+    fig.update_xaxes(title_text='Total Spending ($)', row=1, col=1)
+    fig.update_xaxes(title_text='Transactions', row=1, col=2)
+    fig.update_yaxes(title_text='Merchant', row=1, col=1)
+    fig.update_yaxes(title_text='Merchant', row=1, col=2)
 
     if height is not None:
         fig.update_layout(height=height)
