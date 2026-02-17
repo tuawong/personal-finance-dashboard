@@ -3,7 +3,7 @@ Spending Analysis Page
 """
 
 import pandas as pd
-from dash import html, dcc, callback, Output, Input, register_page
+from dash import html, dcc, callback, Output, Input, register_page, dash_table
 
 from main.visuals import (
     create_daily_spending_chart,
@@ -29,10 +29,14 @@ spending_by_source['Date'] = pd.to_datetime(spending_by_source['Date'])
 account_balance['Date'] = pd.to_datetime(account_balance['Date'])
 spending_by_source['Month'] = spending_by_source['Date'].dt.to_period('M').astype(str)
 account_balance['Month'] = account_balance['Date'].dt.to_period('M').astype(str)
+spending_by_source['Date_Display'] = spending_by_source['Date'].dt.strftime('%Y-%m-%d')
+if 'Subdescription' not in spending_by_source.columns:
+    spending_by_source['Subdescription'] = ''
 
 # Get available months and sources for dropdowns
 all_months = ['All'] + sorted(spending_by_source['Month'].unique(), reverse=True)
 all_sources = spending_by_source['Source'].unique().tolist()
+all_categories = ['All'] + sorted(spending_by_source['Category'].dropna().unique().tolist())
 
 # Chart sizing (tweak here to test layout changes)
 VS_SAVINGS_HEIGHT = 350
@@ -87,6 +91,57 @@ layout = html.Div([
         html.Div([
             dcc.Graph(id='spending-breakdown-pie', style={'height': f'{BREAKDOWN_HEIGHT}px'})
         ], style={'width': '48%', 'display': 'inline-block', 'marginLeft': '2%', 'verticalAlign': 'top'}),
+    ], style={'marginBottom': '20px'}),
+
+    # Line items by category
+    html.Div([
+        html.H3("Spending Line Items", style={'marginBottom': '10px'}),
+        html.Div([
+            html.Label("Filter by Category:", style={'fontWeight': 'bold'}),
+            dcc.Dropdown(
+                id='spending-category-dropdown',
+                options=[{'label': c, 'value': c} for c in all_categories],
+                value='All',
+                clearable=False,
+                style={'width': '300px'}
+            )
+        ], style={'marginBottom': '15px'}),
+        dash_table.DataTable(
+            id='spending-line-items-table',
+            columns=[
+                {'name': 'Date', 'id': 'Date_Display'},
+                {'name': 'Description', 'id': 'Description'},
+                {'name': 'Details', 'id': 'Subdescription'},
+                {'name': 'Category', 'id': 'Category'},
+                {'name': 'Source', 'id': 'Source'},
+                {'name': 'Amount', 'id': 'Amount', 'type': 'numeric', 'format': {'specifier': '$.2f'}},
+            ],
+            data=[],
+            page_size=15,
+            sort_action='native',
+            filter_action='native',
+            style_table={'overflowX': 'auto'},
+            style_cell={
+                'textAlign': 'left',
+                'padding': '10px',
+                'fontFamily': 'Arial, sans-serif',
+            },
+            style_header={
+                'backgroundColor': '#3498db',
+                'color': 'white',
+                'fontWeight': 'bold',
+            },
+            style_data_conditional=[
+                {
+                    'if': {'row_index': 'odd'},
+                    'backgroundColor': '#f8f9fa',
+                },
+                {
+                    'if': {'filter_query': '{Amount} < 0'},
+                    'color': 'green',
+                },
+            ],
+        ),
     ], style={'marginBottom': '20px'}),
 ])
 
@@ -150,3 +205,37 @@ def update_spending_breakdown_pie(selected_month, selected_sources):
         selected_month,
         height=BREAKDOWN_HEIGHT
     )
+
+
+@callback(
+    Output('spending-line-items-table', 'data'),
+    [Input('spending-month-dropdown', 'value'),
+     Input('spending-source-dropdown', 'value'),
+     Input('spending-category-dropdown', 'value'),
+     Input('spending-breakdown-pie', 'clickData')]
+)
+def update_spending_line_items(selected_month, selected_sources, selected_category, pie_click):
+    if not selected_sources:
+        selected_sources = all_sources
+
+    df = spending_by_source[spending_by_source['Source'].isin(selected_sources)]
+    if selected_month != 'All':
+        df = df[df['Month'] == selected_month]
+
+    category_filter = selected_category
+    if pie_click and selected_category == 'All':
+        category_filter = pie_click.get('points', [{}])[0].get('label', 'All')
+
+    if category_filter != 'All':
+        if category_filter == 'Others':
+            category_totals = df.groupby('Category')['Amount'].sum()
+            total_expenses = category_totals.sum()
+            threshold = 0.01 * total_expenses if total_expenses > 0 else 0
+            small_categories = category_totals[category_totals < threshold].index.tolist()
+            df = df[df['Category'].isin(small_categories)]
+        else:
+            df = df[df['Category'] == category_filter]
+
+    df = df.sort_values('Date', ascending=False)
+    display_columns = ['Date_Display', 'Description', 'Subdescription', 'Category', 'Source', 'Amount']
+    return df[display_columns].to_dict('records')
