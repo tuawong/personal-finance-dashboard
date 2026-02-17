@@ -34,6 +34,10 @@ account_balance['Month'] = account_balance['Date'].dt.to_period('M').astype(str)
 all_months = ['All'] + sorted(spending_by_source['Month'].unique(), reverse=True)
 all_sources = spending_by_source['Source'].unique().tolist()
 
+# Chart sizing (tweak here to test layout changes)
+VS_SAVINGS_HEIGHT = 350
+BREAKDOWN_HEIGHT = 750
+
 # Layout
 layout = html.Div([
     html.H2("Spending Analysis", style={'textAlign': 'center', 'color': '#2c3e50'}),
@@ -63,20 +67,25 @@ layout = html.Div([
         ], style={'width': '400px', 'display': 'inline-block'}),
     ], style={'marginBottom': '30px', 'padding': '20px', 'backgroundColor': '#f8f9fa', 'borderRadius': '10px'}),
     
-    # Row 1: Daily spending by source
+    # Row 1: Spending vs savings pie + daily spending by source
     html.Div([
-        dcc.Graph(id='daily-spending-chart')
+        html.Div([
+            dcc.Graph(id='spending-vs-savings-pie', style={'height': f'{VS_SAVINGS_HEIGHT}px'})
+        ], style={'width': '30%', 'display': 'inline-block', 'verticalAlign': 'top'}),
+
+        html.Div([
+            dcc.Graph(id='daily-spending-chart')
+        ], style={'width': '68%', 'display': 'inline-block', 'marginLeft': '2%', 'verticalAlign': 'top'}),
     ], style={'marginBottom': '20px'}),
-    
-    # Row 2: Category bar chart (double height) and two pie charts stacked
+
+    # Row 2: Category bar chart (double height) and spending breakdown pie
     html.Div([
         html.Div([
             dcc.Graph(id='category-bar-chart', style={'height': '750px'})
         ], style={'width': '48%', 'display': 'inline-block', 'verticalAlign': 'top'}),
-        
+
         html.Div([
-            dcc.Graph(id='spending-vs-savings-pie'),
-            dcc.Graph(id='spending-breakdown-pie')
+            dcc.Graph(id='spending-breakdown-pie', style={'height': f'{BREAKDOWN_HEIGHT}px'})
         ], style={'width': '48%', 'display': 'inline-block', 'marginLeft': '2%', 'verticalAlign': 'top'}),
     ], style={'marginBottom': '20px'}),
 ])
@@ -118,7 +127,12 @@ def update_spending_vs_savings_pie(selected_month, selected_sources):
     if not selected_sources:
         selected_sources = all_sources
     df = spending_by_source[spending_by_source['Source'].isin(selected_sources)]
-    return create_spending_vs_savings_pie(df, account_balance, selected_month)
+    return create_spending_vs_savings_pie(
+        df,
+        account_balance,
+        selected_month,
+        height=VS_SAVINGS_HEIGHT
+    )
 
 
 @callback(
@@ -130,4 +144,9 @@ def update_spending_breakdown_pie(selected_month, selected_sources):
     if not selected_sources:
         selected_sources = all_sources
     df = spending_by_source[spending_by_source['Source'].isin(selected_sources)]
-    return create_spending_breakdown_pie(df, account_balance, selected_month)
+    return create_spending_breakdown_pie(
+        df,
+        account_balance,
+        selected_month,
+        height=BREAKDOWN_HEIGHT
+    )

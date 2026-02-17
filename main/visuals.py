@@ -166,7 +166,8 @@ def _get_payroll_and_expenses(spending_df, account_df, selected_month):
 def create_spending_vs_savings_pie(
     spending_df: pd.DataFrame,
     account_df: pd.DataFrame,
-    selected_month: str
+    selected_month: str,
+    height: Optional[int] = None
 ) -> go.Figure:
     """
     Create a donut pie chart comparing total spending vs savings.
@@ -198,7 +199,6 @@ def create_spending_vs_savings_pie(
         
         fig.update_layout(
             title=f'Spending vs Savings - {title_suffix}<br><sub>Payroll: ${payroll:,.2f}</sub>',
-            height=350,
             margin=dict(t=80, b=60, l=60, r=60),
             showlegend=False
         )
@@ -215,10 +215,12 @@ def create_spending_vs_savings_pie(
         
         fig.update_layout(
             title=f'Spending vs Savings - {title_suffix}<br><sub>(No payroll data available)</sub>',
-            height=350,
             margin=dict(t=80, b=60, l=60, r=60),
             showlegend=False
         )
+
+    if height is not None:
+        fig.update_layout(height=height)
 
     return fig
 
@@ -226,7 +228,8 @@ def create_spending_vs_savings_pie(
 def create_spending_breakdown_pie(
     spending_df: pd.DataFrame,
     account_df: pd.DataFrame,
-    selected_month: str
+    selected_month: str,
+    height: Optional[int] = None
 ) -> go.Figure:
     """
     Create a donut pie chart showing spending breakdown by category.
@@ -279,10 +282,12 @@ def create_spending_breakdown_pie(
     
     fig.update_layout(
         title=f'Spending Breakdown - {title_suffix}',
-        height=400,
         margin=dict(t=80, b=80, l=100, r=100),
         showlegend=False
     )
+
+    if height is not None:
+        fig.update_layout(height=height)
 
     return fig
 
@@ -290,7 +295,8 @@ def create_spending_breakdown_pie(
 def create_savings_pie_chart(
     spending_df: pd.DataFrame,
     account_df: pd.DataFrame,
-    selected_month: str
+    selected_month: str,
+    height: Optional[int] = None
 ) -> go.Figure:
     """
     Create a donut pie chart showing spending breakdown vs savings.
@@ -328,7 +334,6 @@ def create_savings_pie_chart(
         fig.update_layout(
             title=f'Income Allocation - {title_suffix}<br><sub>Payroll: ${payroll:,.2f}</sub>',
             annotations=[dict(text=f'${payroll:,.0f}', x=0.5, y=0.5, font_size=16, showarrow=False)],
-            height=600,
             margin=dict(t=80, b=80, l=80, r=80)
         )
     else:
@@ -348,9 +353,11 @@ def create_savings_pie_chart(
         fig.update_layout(
             title=f'Spending Breakdown - {title_suffix}<br><sub>(No payroll data available)</sub>',
             annotations=[dict(text=f'${total_expenses:,.0f}', x=0.5, y=0.5, font_size=16, showarrow=False)],
-            height=600,
             margin=dict(t=80, b=80, l=80, r=80)
         )
+
+    if height is not None:
+        fig.update_layout(height=height)
 
     return fig
 
@@ -441,7 +448,8 @@ def create_day_of_week_chart(spending_df: pd.DataFrame) -> go.Figure:
 def create_top_merchants_chart(
     spending_df: pd.DataFrame,
     excluded_categories: Optional[List[str]] = None,
-    top_n: int = 10
+    top_n: int = 10,
+    height: Optional[int] = None
 ) -> go.Figure:
     """
     Create a horizontal bar chart of top merchants by total spending.
@@ -482,8 +490,10 @@ def create_top_merchants_chart(
     fig.update_layout(
         xaxis_title='Total Spending ($)',
         yaxis_title='Merchant',
-        showlegend=False,
-        height=500
+        showlegend=False
     )
+
+    if height is not None:
+        fig.update_layout(height=height)
     
     return fig
