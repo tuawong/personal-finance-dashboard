@@ -1,6 +1,6 @@
 from typing import List
 
-import main.Constants as Constants
+from main.config import API_KEY_OPENAI
 from  openai import OpenAI
 import os
 import numpy as np
@@ -10,19 +10,22 @@ import time
 import os
 from io import StringIO
 from datetime import datetime
+import hashlib
+from collections import defaultdict
 
-client = OpenAI(
-    api_key = Constants.API_KEY_OPENAI,
-)
-
-def get_completion(prompt, model="gpt-4o-mini", temperature=0):
-    messages = [{"role": "user", "content": prompt}]
-    response = client.chat.completions.create(
-        model=model,
-        messages=messages,
-        temperature=temperature,
+if API_KEY_OPENAI:
+    client = OpenAI(
+        api_key = API_KEY_OPENAI,
     )
-    return response
+
+    def get_completion(prompt, model="gpt-4o-mini", temperature=0):
+        messages = [{"role": "user", "content": prompt}]
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+        )
+        return response
 
 
 def parse_response_table(
@@ -61,3 +64,50 @@ def parse_response_table(
             df[col] = datetime.now().strftime("%Y-%m-%d")
 
     return df
+
+
+
+def generate_deterministic_row_ids(df):
+    """
+    Generate deterministic IDs based on transaction content.
+    Handles duplicate transactions (same date, description, amount, source) 
+    by adding incremental suffixes.
+    
+    Args:
+        df: DataFrame with columns: Date, Description, Amount, Source, File
+        
+    Returns:
+        Series of unique 8-character RowIDs
+    """
+    # Create a base hash for each row
+    def create_hash_key(row):
+        """Create a stable string representation of the transaction"""
+        date_str = pd.to_datetime(row['Date']).strftime('%Y-%m-%d')
+        desc = str(row['Description']).strip().lower()
+        amount = f"{float(row['Amount']):.2f}"
+        source = str(row['Source']).strip()
+        file = str(row['File']).strip()
+        return f"{date_str}|{desc}|{amount}|{source}|{file}"
+    
+    # Track duplicate counts for each unique transaction
+    hash_counter = defaultdict(int)
+    row_ids = []
+    
+    for idx, row in df.iterrows():
+        base_key = create_hash_key(row)
+        
+        # Get the count for this transaction (0 for first occurrence)
+        occurrence = hash_counter[base_key]
+        hash_counter[base_key] += 1
+        
+        # Add suffix for duplicates
+        if occurrence > 0:
+            hash_input = f"{base_key}|dup_{occurrence}"
+        else:
+            hash_input = base_key
+        
+        # Generate 8-character hash
+        row_id = hashlib.md5(hash_input.encode()).hexdigest()[:20]
+        row_ids.append(row_id)
+    
+    return pd.Series(row_ids, index=df.index)

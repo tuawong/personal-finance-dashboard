@@ -17,7 +17,7 @@ register_page(__name__, path='/analytics', name='Analytics')
 
 # Load and prepare data
 all_spending = load_all_spending_from_db()
-spending_by_source = all_spending.loc[~all_spending.Category.isin(['Transfer', 'Credit card payment', 'Salary'])]
+spending_by_source = all_spending.loc[~all_spending.Category.isin(['Transfer', 'Credit card payment', 'Salary'])].copy()
 spending_by_source['Amount'] = spending_by_source['Amount'].replace('$', '', regex=True).astype(float)
 
 spending_by_source['Date'] = pd.to_datetime(spending_by_source['Date'])

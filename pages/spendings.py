@@ -20,10 +20,10 @@ register_page(__name__, path='/spending', name='Spending')
 # spending_by_source = pd.read_csv('data/Processed/spending_by_source.csv')
 # account_balance = pd.read_csv('data/Processed/account_balance.csv')
 all_spending = load_all_spending_from_db()
-spending_by_source = all_spending.loc[~all_spending.Category.isin(['Transfer', 'Credit card payment', 'Salary'])]
+spending_by_source = all_spending.loc[~all_spending.Category.isin(['Transfer', 'Credit card payment', 'Salary'])].copy()
 spending_by_source['Amount'] = spending_by_source['Amount'].replace('$', '', regex=True).astype(float)
 
-account_balance = all_spending.loc[all_spending.Source=='Scotia Debit']
+account_balance = all_spending.loc[all_spending.Source=='Scotia Debit'].copy()
 
 spending_by_source['Date'] = pd.to_datetime(spending_by_source['Date'])
 account_balance['Date'] = pd.to_datetime(account_balance['Date'])
